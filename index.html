@@ -1,0 +1,443 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<style>
+canvas {
+    border:1px solid #d3d3d3;
+    background-color: #f1f1f1;
+}
+</style>
+</head>
+<body onload="startGame()">
+<script>
+var cheatsActivated = false;
+var myGamePiece;
+var myObstacles = [];
+var myBoost;
+var myScore;
+var canvasWidth = 270;
+var canvasHeight = 480;
+var pause = false;
+var playerSpeed = 3;
+var playerAcceleration = .5;
+var obstacleSpeed = -1;
+var obstacleAcceleration = .25;
+var newObNeeded = true;
+var lastObstacle = 0;
+var newBoostNeeded = false;
+var lastBoost = 0;
+
+var down = false;
+var up = false;
+var left = false;
+var right = false;
+
+var customerNames = ["AONHEWITT", "HCAHEALTH", "DOMINOS", "EQUIFAX", "BCBSABLUEWEB", "GWU", "GOA"];
+
+//konami Code
+// a key map of allowed keys
+var allowedKeys = {
+  37: 'left',
+  38: 'up',
+  39: 'right',
+  40: 'down',
+  65: 'a',
+  66: 'b'
+};
+
+// the 'official' Konami Code sequence
+var konamiCode = ['up', 'up', 'down', 'down', 'left', 'right', 'left', 'right', 'b', 'a'];
+
+// a variable to remember the 'position' the user has reached so far.
+var konamiCodePosition = 0;
+
+function activateCheats() {
+  document.body.style.backgroundImage = "url('images/cheatBackground.jpg')";
+
+  myGamePiece = new component(30, 30, "logo", myGamePiece.x, myGamePiece.y, "player");
+
+  cheatsActivated = true;
+}
+
+function startGame() {
+    myGamePiece = new component(30, 30, "red", 120, 10, "player");
+    myScore = new component("15px", "Consolas", "black", 5, 16, "text");
+    myGameArea.start();
+}
+
+var myGameArea = {
+    canvas : document.createElement("canvas"),
+    start : function() {
+        this.canvas.width = canvasWidth;
+        this.canvas.height = canvasHeight;
+        this.context = this.canvas.getContext("2d");
+        document.body.insertBefore(this.canvas, document.body.childNodes[0]);
+        this.frameNo = 0;
+        this.interval = setInterval(updateGameArea, 20);
+        },
+    clear : function() {
+        this.context.clearRect(0, 0, this.canvas.width, this.canvas.height);
+    },
+    stop : function() {
+        clearInterval(this.interval);
+    },
+    resume : function() {
+        this.interval = setInterval(updateGameArea, 20);
+    }
+}
+
+function component(width, height, color, x, y, type) {
+    this.type = type;
+    this.width = width;
+    this.height = height;
+    this.speedX = 0;
+    this.speedY = 0;    
+    this.x = x;
+    this.y = y;   
+ 
+    this.update = function() {
+        ctx = myGameArea.context;
+        if (this.type == "text") {
+            ctx.font = this.width + " " + this.height;
+            ctx.fillStyle = color;
+            ctx.fillText(this.text, this.x, this.y);
+        } else if (this.type == "player") {
+            if (color == "logo") {
+                this.image = new Image();
+                this.image.src = "images/liferay_logo.png"
+                ctx.drawImage(this.image, this.x, this.y, this.width, this.height);
+            } else {
+               ctx.fillStyle = color;
+               ctx.fillRect(this.x, this.y, this.width, this.height);
+            }
+
+            if ((this.x + this.width) >= canvasWidth) {
+                this.x = canvasWidth - this.width;
+                this.speedX = 0;
+            }
+            
+            if (this.x <= 0) {
+                this.x = 0;
+                this.speedX = 0;
+            }
+            
+            if ((this.y + this.height) >= canvasHeight) {
+                this.y = canvasHeight - this.height;
+                this.speedY = 0;
+            }
+            
+            if (this.y <= 0) {
+                myGameArea.stop();
+                return;
+            }
+            
+        } else if (this.type == "obstacle") {
+            ctx.fillStyle = "black";
+            ctx.fillRect(this.x, this.y, this.width, this.height);
+
+            if (cheatsActivated) {
+              ctx.fillStyle = "white";
+              ctx.font = "8pt sans-serif";
+              var txtHeight=15;
+              var offset=5;
+              var widthOffset = 0;
+              var customer = this.customerName;
+
+              if (customer === undefined) {
+                customer = customerNames[Math.floor(Math.random() * customerNames.length)];
+                this.customerName = customer;
+              }
+
+              var textWidth = Math.ceil(ctx.measureText(customer).width);
+
+              var isBreak = false;
+
+              do {
+                  while ((widthOffset + textWidth) >= this.width) {
+                      customer = customer.substring(0, customer.length - 1);
+
+                      textWidth = Math.ceil(ctx.measureText(customer).width);
+
+                      isBreak = true;
+                  }
+
+                  ctx.fillText(customer, this.x + widthOffset, this.y + 10, this.width - widthOffset);
+
+                  widthOffset += textWidth;
+              } while (!isBreak);
+            }
+        }
+        else {
+            ctx.fillStyle = color;
+            ctx.fillRect(this.x, this.y, this.width, this.height);
+        }
+    }
+
+    this.newPos = function() {
+        this.x += this.speedX;
+        this.y += this.speedY;      
+    }
+
+    this.crash = function(otherobj, even) {
+        var myleft = this.x;
+        var myright = this.x + (this.width);
+        var mytop = this.y;
+        var mybottom = this.y + (this.height);
+        var otherleft = otherobj.x;
+        var otherright = otherobj.x + (otherobj.width);
+        var othertop = otherobj.y;
+        var otherbottom = otherobj.y + (otherobj.height);
+
+        if (((otherbottom <= mybottom) && (othertop >= mytop)) || // Obstacle within player
+            ((mybottom < otherbottom) && ((othertop > mytop) && (othertop < mybottom))) || // Player bottom within obstacle
+            ((mytop > othertop) && ((otherbottom > mytop) && (otherbottom < mybottom)))) { // Player top within obstacle
+
+            if (even) {
+                if (myleft <= otherright) {
+                    return true;
+                }
+            }
+            else {
+                if (otherleft <= myright) {
+                    return true;
+                }
+            }
+        }
+        else if ((mybottom < othertop) || (mytop > otherbottom) || (myright < otherleft) || (myleft > otherright)) {
+            return false;
+        }
+        else {
+            return true;
+        }
+    }
+}
+
+function hitBoost(rect1, rect2) {
+    if (rect1.x < rect2.x + rect2.width &&
+    rect1.x + rect1.width > rect2.x &&
+    rect1.y < rect2.y + rect2.height &&
+    rect1.height + rect1.y > rect2.y) {
+        return true;
+    }
+}
+
+function updateGameArea() {
+    if (down) {
+        moveDown();
+    }
+    if (up) {
+        moveUp();
+    }
+    if (left) {
+        moveLeft();
+    }
+    if (right) {
+        moveRight();
+    }
+
+    var x, height, gap, minHeight, maxHeight, minGap, maxGap;
+
+    if ((myObstacles.length > 0) && (myObstacles[0].y <= 0)) {
+        myObstacles.shift();
+        myObstacles.shift();
+    }
+  
+    for (i = 0; i < myObstacles.length; i += 1) {
+        even = false;
+        if(i % 2 == 0) {
+            even = true;
+        }
+
+        var crash = myGamePiece.crash(myObstacles[i], even);
+
+        if (crash) {
+            // If my bottom is below obstacles top and my top is above the obstacles top, push me back up
+            if (((myGamePiece.y + myGamePiece.height) >= myObstacles[i].y) && (myGamePiece.y < myObstacles[i].y)) {
+                // If left obstacle (even) and player left is less than or equal to obstacle right
+                if (even && (myGamePiece.x < (myObstacles[i].x + myObstacles[i].width - 5))) {
+                    myGamePiece.speedY = -1;
+                    myGamePiece.y = myObstacles[i].y - 30;
+                }
+                // if right obstacled (!even) and player right is greater than or equal to obstacle left
+                else if (!even && ((myGamePiece.x + myGamePiece.width - 5) > myObstacles[i].x)) {
+                    myGamePiece.speedY = -1;
+                    myGamePiece.y = myObstacles[i].y - 30;
+                }
+                // If left obstacle, keep y the same but reset X
+                else if (even) {
+                    myGamePiece.x = myObstacles[i].x + myObstacles[i].width;
+                }
+                else {
+                    myGamePiece.x = myObstacles[i].x - myGamePiece.width;
+                }
+            }
+            // If my top is above obstacles bottom, push me back down
+            else if (myGamePiece.y <= (myObstacles[i].y + myObstacles[i].height)) {
+                myGamePiece.y = myObstacles[i].y + 11;
+            }
+        }
+    }
+
+    myGameArea.clear();
+    myGameArea.frameNo += 1;
+
+    if (lastObstacle >= 150) {
+        newObNeeded = true;
+    }
+
+    if (myGameArea.frameNo == 1 || newObNeeded) {
+        lastObstacle = 0;
+        newObNeeded = false;
+        y = myGameArea.canvas.height;
+        minWidth = 20;
+        maxWidth = 200;
+        width = Math.floor(Math.random()*(maxWidth-minWidth+1)+minWidth);
+        minGap = 50;
+        maxGap = 200;
+        gap = Math.floor(Math.random()*(maxGap-minGap+1)+minGap);
+        var customerName = customerNames[Math.floor(Math.random() * customerNames.length)];
+        myObstacles.push(new component(width, 10, "green", 0, y, "obstacle", customerName));
+        myObstacles.push(new component(y - width - gap, 10, "green", width + gap, y, "obstacle", customerName));
+    }
+
+    if (lastBoost >= 1500) {
+        newBoostNeeded = true;
+    }
+
+    if (myBoost && hitBoost(myGamePiece, myBoost)) {
+        myBoost = null; 
+        playerSpeed += playerAcceleration;        
+    }
+    
+    if (newBoostNeeded) {
+        newBoostNeeded = false;
+        lastBoost = 0;
+        y = Math.floor((Math.random() * myGameArea.canvas.height) + (myGameArea.canvas.height/2));
+        x = Math.floor(Math.random() * myGameArea.canvas.width);
+        width = height = 10;
+        myBoost = new component(width, height, "blue", x, y, "boost");
+    }
+
+    if (myBoost) {
+        myBoost.speedY = -1;
+        myBoost.newPos();
+        myBoost.update();
+    }
+
+    for (i = 0; i < myObstacles.length; i += 1) {
+        myObstacles[i].speedY = obstacleSpeed;
+        myObstacles[i].newPos();
+        myObstacles[i].update();
+    }
+
+    myScore.text="SCORE: " + myGameArea.frameNo;
+    if (myGameArea.frameNo % 350 == 0) {
+        obstacleSpeed -= obstacleAcceleration;
+    }
+    myScore.update();
+    myGamePiece.newPos();
+    myGamePiece.update();
+    lastObstacle +=(obstacleSpeed*-1);
+    lastBoost += (obstacleSpeed*-1);
+}
+
+function everyinterval(n) {
+    if ((myGameArea.frameNo / n) % 1 == 0) {
+        return true;
+    }
+
+    return false;
+}
+
+function moveUp() {
+    myGamePiece.speedY = -playerSpeed;
+}
+
+function moveDown() {
+    myGamePiece.speedY = playerSpeed;
+}
+
+function moveLeft() {
+    myGamePiece.speedX = -playerSpeed;
+}
+
+function moveRight() {
+    myGamePiece.speedX = playerSpeed;
+}
+
+function clearMove() {
+    myGamePiece.speedX = 0;
+    myGamePiece.speedY = 0;
+}
+
+window.addEventListener('keydown', function (e) {
+    if([32, 37, 38, 39, 40].indexOf(e.keyCode) > -1) {
+        e.preventDefault();
+    }
+
+    if (e.keyCode == 32) {        
+        if(pause) {
+            pause = false;
+            myGameArea.resume();
+        } else {
+            pause = true;
+            myGameArea.stop();
+        }
+    }
+
+    if (e.keyCode == 38 || e.keyCode == 87) {
+        up = true;
+    }
+    if (e.keyCode == 40 || e.keyCode == 83) {
+        down = true;
+    }
+    if (e.keyCode == 37 || e.keyCode == 65) {
+        left = true;
+    }
+    if (e.keyCode == 39 || e.keyCode == 68) {
+        right = true;
+    }
+
+    var key = allowedKeys[e.keyCode];
+    // get the value of the required key from the konami code
+    var requiredKey = konamiCode[konamiCodePosition];
+
+    // compare the key with the required key
+    if (key == requiredKey) {
+        // move to the next key in the konami code sequence
+        konamiCodePosition++;
+
+        // if the last key is reached, activate cheats
+        if (konamiCodePosition == konamiCode.length) {
+          activateCheats();
+          konamiCodePosition = 0;
+        }
+    } else {
+        konamiCodePosition = 0;
+    }
+});
+
+window.addEventListener('keyup', function (e) {
+    if (e.keyCode == 38 || e.keyCode == 87) {
+        myGamePiece.speedY = 0;
+        up = false;
+    }
+    if (e.keyCode == 40 || e.keyCode == 83) {
+        myGamePiece.speedY = 0;
+        down = false;        
+    }
+    if (e.keyCode == 37 || e.keyCode == 65) {
+        myGamePiece.speedX = 0;
+        left = false;
+    }
+    if (e.keyCode == 39 || e.keyCode == 68) {
+        myGamePiece.speedX = 0;
+        right = false;
+    }
+});
+</script>
+
+<p>The score will count one point for each frame you manage to "stay alive".</p>
+</body>
+</html>
