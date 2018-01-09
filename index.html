@@ -12,6 +12,8 @@ canvas {
 <body onload="startGame()">
 <script>
 var cheatsActivated = false;
+var maxGap = 200;
+var minGap = 50;
 var myGamePiece;
 var myObstacles = [];
 var myBoost;
@@ -236,7 +238,7 @@ function updateGameArea() {
         moveRight();
     }
 
-    var x, height, gap, minHeight, maxHeight, minGap, maxGap;
+    var x, height, gap, minHeight, maxHeight;
 
     if ((myObstacles.length > 0) && (myObstacles[0].y <= 0)) {
         myObstacles.shift();
@@ -293,8 +295,6 @@ function updateGameArea() {
         minWidth = 20;
         maxWidth = 200;
         width = Math.floor(Math.random()*(maxWidth-minWidth+1)+minWidth);
-        minGap = 50;
-        maxGap = 200;
         gap = Math.floor(Math.random()*(maxGap-minGap+1)+minGap);
         var customerName = customerNames[Math.floor(Math.random() * customerNames.length)];
         myObstacles.push(new component(width, 10, "green", 0, y, "obstacle", customerName));
@@ -334,6 +334,10 @@ function updateGameArea() {
     myScore.text="SCORE: " + myGameArea.frameNo;
     if (myGameArea.frameNo % 350 == 0) {
         obstacleSpeed -= obstacleAcceleration;
+
+        if (maxGap > minGap) {
+        	maxGap -= 10;
+        }
     }
     myScore.update();
     myGamePiece.newPos();
